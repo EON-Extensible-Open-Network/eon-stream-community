@@ -22,7 +22,7 @@ path = "src/main.rs"
 # no async runtime in the tree.
 tiny_http = "0.12"
 # The database, with SQLite compiled in so setup is one command and no system library.
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 # Password hashing (Argon2id). A password is never stored, only this.
 argon2 = "0.5"
 # Session tokens are stored hashed, so a copy of the database is not a set of logins.

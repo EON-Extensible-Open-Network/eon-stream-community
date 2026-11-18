@@ -210,11 +210,7 @@ pub fn password(ctx: &Ctx, req: &Req) -> Out {
 fn rows(ctx: &Ctx, sql: &str, id: i64) -> Result<Vec<Value>, ApiError> {
     let mut statement = ctx.db.prepare(sql)?;
     let count = statement.column_count();
-    let names: Vec<String> = statement
-        .column_names()
-        .iter()
-        .map(|n| (*n).to_owned())
-        .collect();
+    let names: Vec<String> = statement.column_names().map(ToOwned::to_owned).collect();
     let out = statement
         .query_map(params![id], |row| {
             let mut object = serde_json::Map::new();
