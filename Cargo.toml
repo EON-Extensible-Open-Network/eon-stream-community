@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 EON contributors
+
+[package]
+name = "eon-stream-community"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.98"
+license = "AGPL-3.0-or-later"
+description = "Reference server for the EON Stream community API: scores, reviews, facts, lists, charts, awards, polls, skip markers and moderation."
+repository = "https://github.com/EON-Extensible-Open-Network/eon-stream-community"
+publish = false
+
+[[bin]]
+name = "eon-community"
+path = "src/main.rs"
+
+# Every dependency is a supply-chain commitment (madde 37); each says why it is here.
+[dependencies]
+# The HTTP server. Synchronous and small: one process, one SQLite file, requests
+# answered in order -- the right size for a reference server anyone can read, and
+# no async runtime in the tree.
+tiny_http = "0.12"
+# The database, with SQLite compiled in so setup is one command and no system library.
+rusqlite = { version = "0.37", features = ["bundled"] }
+# Password hashing (Argon2id). A password is never stored, only this.
+argon2 = "0.5"
+# Session tokens are stored hashed, so a copy of the database is not a set of logins.
+sha2 = "0.10"
+# Randomness for tokens, from the operating system.
+getrandom = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# The tests speak HTTP to a real server on a loopback port.
+ureq = { version = "2", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# A panic in a request handler is a request the server never answers.
+unwrap_used = "deny"
+panic = "deny"
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+too_many_lines = "allow"
+needless_pass_by_value = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
