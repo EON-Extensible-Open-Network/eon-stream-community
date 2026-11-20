@@ -5,6 +5,7 @@
 
 mod accounts;
 mod content;
+pub mod eon_account;
 mod lists;
 mod moderation;
 mod ratings;
@@ -22,6 +23,7 @@ pub fn route(ctx: &Ctx, req: &Req) -> Out {
         // accounts and sessions
         ("POST", ["accounts"]) => accounts::create(ctx, req),
         ("POST", ["sessions"]) => accounts::sign_in(ctx, req),
+        ("POST", ["sessions", "account"]) => eon_account::sign_in(ctx, req),
         ("DELETE", ["sessions"]) => accounts::sign_out(ctx, req),
         ("GET", ["me"]) => accounts::me(ctx),
         ("PUT", ["me"]) => accounts::update(ctx, req),

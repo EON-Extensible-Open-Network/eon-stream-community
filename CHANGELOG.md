@@ -5,6 +5,21 @@ SPDX-FileCopyrightText: 2026 EON contributors
 
 # Changelog
 
+## 0.2.0 — signing in with EON Account
+
+Community API v0.1 (plan madde 46):
+
+- **`POST /v0/sessions/account`** signs in with an assertion from an EON Account server.
+  - The operator names the account servers the server trusts, each with its key:
+    `--origin` and `--trust-account ISSUER,KID,PUBLIC-KEY`. Checking an assertion makes no
+    request out.
+  - The account here is keyed on the pseudonym the account server made for this server
+    alone. It has no password and no e-mail.
+  - A shared EON username becomes the name here if it is free.
+- Password sign-in, password change and `GET /v0/me` handle such accounts: there is
+  nothing to sign in with, nothing to change, and no e-mail address.
+- `RUSTSEC-2026-0387` is ignored in `deny.toml`, with the reason it cannot be reached.
+
 ## 0.1.0 — first version
 
 The reference server for community API v0 as of EON Stream `v0.3`:

@@ -5,6 +5,7 @@
 //!
 //! ```text
 //! eon-community serve [--listen 127.0.0.1:8770] [--db community.sqlite]
+//!                     [--origin https://community.example.org --trust-account ISSUER,KID,PUBLIC-KEY]
 //! eon-community role <username> <user|moderator|admin> [--db community.sqlite]
 //! ```
 //!
@@ -36,6 +37,41 @@ fn main() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
+            // Signing in with EON Account (madde 46): this server's own origin,
+            // and each account server it trusts as ISSUER,KID,PUBLIC-KEY -- the
+            // key given here, so checking an assertion needs no request out.
+            if let Some(origin) = args
+                .iter()
+                .position(|a| a == "--origin")
+                .and_then(|at| args.get(at + 1))
+            {
+                let issuers: Vec<_> = args
+                    .windows(2)
+                    .filter(|w| w[0] == "--trust-account")
+                    .filter_map(|w| {
+                        let mut parts = w[1].splitn(3, ',');
+                        let (issuer, kid, public) = (parts.next()?, parts.next()?, parts.next()?);
+                        Some(eon_account_client::assertion::KeySet {
+                            issuer: issuer.trim_end_matches('/').to_owned(),
+                            keys: vec![eon_account_client::assertion::PublishedKey {
+                                kid: kid.to_owned(),
+                                alg: "Ed25519".to_owned(),
+                                public: public.to_owned(),
+                            }],
+                        })
+                    })
+                    .collect();
+                println!(
+                    "Accepting EON Account from {} account server(s) as {origin}",
+                    issuers.len()
+                );
+                eon_stream_community::api::eon_account::configure(
+                    eon_stream_community::api::eon_account::Trust {
+                        origin: origin.trim_end_matches('/').to_owned(),
+                        issuers,
+                    },
+                );
+            }
             let server = match tiny_http::Server::http(&listen) {
                 Ok(server) => server,
                 Err(error) => {

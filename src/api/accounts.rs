@@ -93,7 +93,7 @@ pub fn sign_in(ctx: &Ctx, req: &Req) -> Out {
         .get("password")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let found: Option<(i64, String, String, String)> = ctx
+    let found: Option<(i64, String, Option<String>, String)> = ctx
         .db
         .query_row(
             "SELECT id, username, hash, role FROM users WHERE username = ?1 OR email = ?1",
@@ -101,10 +101,13 @@ pub fn sign_in(ctx: &Ctx, req: &Req) -> Out {
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .optional()?;
-    // The same answer for an unknown login and a wrong password.
-    let Some((id, username, stored, role)) =
-        found.filter(|(_, _, stored, _)| verify(password, stored))
-    else {
+    // The same answer for an unknown login, a wrong password, and an account
+    // that has no password because it signs in with EON Account.
+    let Some((id, username, stored, role)) = found.filter(|(_, _, stored, _)| {
+        stored
+            .as_deref()
+            .is_some_and(|stored| verify(password, stored))
+    }) else {
         return Err(ApiError::new(
             401,
             "unauthorised",
@@ -112,6 +115,14 @@ pub fn sign_in(ctx: &Ctx, req: &Req) -> Out {
         ));
     };
     let _ = stored;
+    let (token, expires) = new_session(ctx, id)?;
+    Ok(Res::ok(json!({
+        "token": token, "username": username, "role": role, "expires_at": expires
+    })))
+}
+
+/// A new session for `id`: the token, and when it ends.
+pub fn new_session(ctx: &Ctx, id: i64) -> Result<(String, i64), ApiError> {
     let token = new_token()?;
     let expires = ctx.now + SESSION_DAYS * 86_400;
     ctx.db.execute(
@@ -122,9 +133,7 @@ pub fn sign_in(ctx: &Ctx, req: &Req) -> Out {
         "DELETE FROM sessions WHERE expires_at <= ?1",
         params![ctx.now],
     )?;
-    Ok(Res::ok(json!({
-        "token": token, "username": username, "role": role, "expires_at": expires
-    })))
+    Ok((token, expires))
 }
 
 pub fn sign_out(ctx: &Ctx, req: &Req) -> Out {
@@ -146,7 +155,7 @@ pub fn me(ctx: &Ctx) -> Out {
         |r| {
             Ok(json!({
                 "username": r.get::<_, String>(0)?,
-                "email": r.get::<_, String>(1)?,
+                "email": r.get::<_, Option<String>>(1)?,
                 "role": r.get::<_, String>(2)?,
                 "bio": r.get::<_, Option<String>>(3)?,
                 "created_at": r.get::<_, i64>(4)?,
@@ -182,11 +191,18 @@ pub fn password(ctx: &Ctx, req: &Req) -> Out {
         .get("new")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let stored: String = ctx.db.query_row(
+    let stored: Option<String> = ctx.db.query_row(
         "SELECT hash FROM users WHERE id = ?1",
         params![user.id],
         |r| r.get(0),
     )?;
+    let Some(stored) = stored else {
+        return Err(ApiError::new(
+            403,
+            "forbidden",
+            "this account signs in with EON Account and has no password here",
+        ));
+    };
     if !verify(old, &stored) {
         return Err(ApiError::new(
             401,

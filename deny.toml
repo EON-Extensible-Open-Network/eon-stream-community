@@ -3,6 +3,19 @@
 
 [advisories]
 yanked = "deny"
+ignore = [
+    # crypto-bigint 0.5.5: secret-dependent branches in big-integer arithmetic
+    # (subtraction, division, Montgomery multiplication). It arrives through
+    # elliptic-curve 0.13, which opaque-ke 4 and voprf 0.5 take for generic
+    # traits. Our suite is ristretto255: its arithmetic is curve25519-dalek's,
+    # and the only elliptic-curve item on that path is hash2curve's
+    # ExpandMsgXmd (SHA-512 expansion, no big integers). No NIST curve
+    # (p256, primeorder, ecdsa) is in the tree to reach the affected code.
+    # Checked 20 Nov 2026 with `cargo tree -i crypto-bigint` and by reading
+    # voprf's group/ristretto.rs. Remove when opaque-ke moves to
+    # elliptic-curve 0.14 / crypto-bigint 0.7.6+; do not widen this entry.
+    { id = "RUSTSEC-2026-0387", reason = "unreachable from the ristretto255 suite; see comment" },
+]
 
 [licenses]
 private = { ignore = true }
@@ -29,3 +42,5 @@ wildcards = "deny"
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The EON Account client, pinned by commit: only its assertion check is used here.
+allow-git = ["https://github.com/EON-Extensible-Open-Network/eon-account-client"]

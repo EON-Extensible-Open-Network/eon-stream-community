@@ -17,12 +17,22 @@ PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS users (
     id              INTEGER PRIMARY KEY,
     username        TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    email           TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    hash            TEXT NOT NULL,
+    -- Both empty for an account that signs in with EON Account (madde 46).
+    email           TEXT UNIQUE COLLATE NOCASE,
+    hash            TEXT,
     role            TEXT NOT NULL DEFAULT 'user',
     bio             TEXT,
     created_at      INTEGER NOT NULL,
     suspended_until INTEGER
+);
+
+-- Which EON Account pseudonym is which account here. The subject is the
+-- pseudonym the account server made for this server alone.
+CREATE TABLE IF NOT EXISTS account_links (
+    issuer  TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (issuer, subject)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

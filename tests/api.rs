@@ -778,3 +778,118 @@ fn a_proxied_visitor_is_rate_limited_and_the_operator_is_not() {
     // The operator, on the machine, is not limited.
     assert!((0..260).all(|_| hit(None) == 200));
 }
+
+/// Signing in with EON Account (madde 46): a real Ed25519 assertion, the
+/// same pseudonym twice is the same account, a shared name is used when it
+/// is free, and an assertion for another server is refused.
+#[test]
+fn eon_account_assertions_sign_in() {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
+    use base64::Engine as _;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    let key = SigningKey::from_bytes(&[9; 32]);
+    let issuer = "https://account.example.org";
+    let origin = "https://community.example.org";
+    eon_stream_community::api::eon_account::configure(
+        eon_stream_community::api::eon_account::Trust {
+            origin: origin.into(),
+            issuers: vec![eon_account_client::assertion::KeySet {
+                issuer: issuer.into(),
+                keys: vec![eon_account_client::assertion::PublishedKey {
+                    kid: "k1".into(),
+                    alg: "Ed25519".into(),
+                    public: B64.encode(key.verifying_key().to_bytes()),
+                }],
+            }],
+        },
+    );
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let assert = |sub: &str, name: Option<&str>, aud: &str| {
+        let mut payload = serde_json::Map::new();
+        payload.insert("v".into(), json!(0));
+        payload.insert("iss".into(), json!(issuer));
+        payload.insert("aud".into(), json!(aud));
+        payload.insert("sub".into(), json!(sub));
+        payload.insert("iat".into(), json!(now));
+        payload.insert("exp".into(), json!(now + 300));
+        payload.insert("kid".into(), json!("k1"));
+        if let Some(n) = name {
+            payload.insert("name".into(), json!(n));
+        }
+        let bytes = serde_json::to_vec(&Value::Object(payload)).unwrap();
+        format!(
+            "{}.{}",
+            B64.encode(&bytes),
+            B64.encode(key.sign(&bytes).to_bytes())
+        )
+    };
+    let s = start("eon-account");
+    // A name already taken here by a password account.
+    let (code, _) = s.call(
+        "POST",
+        "/v0/accounts",
+        None,
+        Some(
+            json!({"username": "deniz_k", "email": "d@example.org", "password": "a long password"}),
+        ),
+    );
+    assert_eq!(code, 201);
+
+    let (code, first) = s.call(
+        "POST",
+        "/v0/sessions/account",
+        None,
+        Some(json!({"assertion": assert("AAAAAAAAAAAAAAAAAAAAAA", Some("deniz.k"), origin)})),
+    );
+    assert_eq!(code, 200, "{first}");
+    assert_eq!(
+        first["username"], "deniz_k2",
+        "the shared name, made unique"
+    );
+    let (code, again) = s.call(
+        "POST",
+        "/v0/sessions/account",
+        None,
+        Some(json!({"assertion": assert("AAAAAAAAAAAAAAAAAAAAAA", None, origin)})),
+    );
+    assert_eq!(code, 200);
+    assert_eq!(
+        again["username"], "deniz_k2",
+        "the same pseudonym is the same account"
+    );
+    let token = again["token"].as_str().unwrap();
+    let (code, me) = s.call("GET", "/v0/me", Some(token), None);
+    assert_eq!(code, 200);
+    assert!(me["email"].is_null(), "no e-mail is held for it");
+    let (code, _) = s.call(
+        "PUT",
+        "/v0/me/password",
+        Some(token),
+        Some(json!({"old": "x", "new": "a long password"})),
+    );
+    assert_eq!(code, 403, "and no password");
+
+    let (code, anon) = s.call(
+        "POST",
+        "/v0/sessions/account",
+        None,
+        Some(json!({"assertion": assert("BBBBBBBBBBBBBBBBBBBBBB", None, origin)})),
+    );
+    assert_eq!(code, 200);
+    assert!(anon["username"].as_str().unwrap().starts_with("viewer_"));
+
+    let (code, _) = s.call("POST", "/v0/sessions/account", None, Some(json!({"assertion": assert("CCCCCCCCCCCCCCCCCCCCCC", None, "https://elsewhere.example.org")})));
+    assert_eq!(code, 401, "an assertion for another server");
+    let forged = assert("DDDDDDDDDDDDDDDDDDDDDD", None, origin).replace('.', ".x");
+    let (code, _) = s.call(
+        "POST",
+        "/v0/sessions/account",
+        None,
+        Some(json!({"assertion": forged})),
+    );
+    assert_eq!(code, 401);
+}

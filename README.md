@@ -54,7 +54,9 @@ eon-community role <username> <user|moderator|admin> [--db community.sqlite]
 
 Exactly what the contract allows (madde 31):
 
-- an account: username, e-mail, an Argon2id password hash, an optional bio, a role;
+- an account: username, e-mail, an Argon2id password hash, an optional bio, a role --
+  or, for an account that signs in with EON Account, no e-mail and no hash, and a link
+  from the account server's pseudonym for this server to the account (`account_links`);
 - sessions, as SHA-256 hashes of their tokens — a copy of the database is not a set of
   logins;
 - what people chose to publish: scores, reviews, facts, votes, lists, poll answers, skip
